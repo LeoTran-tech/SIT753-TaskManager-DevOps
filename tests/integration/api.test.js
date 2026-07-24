@@ -365,4 +365,141 @@ describe('Task Manager API - Integration Tests', () => {
 
         expect(aliceTasks.body).toHaveLength(0);
     });
+
+test('registration should reject missing name', async () => {
+    const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+            email: 'test@example.com',
+            password: 'SecurePassword123!'
+        })
+        .expect(400);
+
+    expect(response.body.error).toBe(
+        'A valid name is required'
+    );
+});
+
+test('registration should reject missing email', async () => {
+    const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+            name: 'Test User',
+            password: 'SecurePassword123!'
+        })
+        .expect(400);
+
+    expect(response.body.error).toBe(
+        'A valid email is required'
+    );
+});
+
+test('login should reject missing credentials', async () => {
+    const response = await request(app)
+        .post('/api/auth/login')
+        .send({})
+        .expect(400);
+
+    expect(response.body.error).toBe(
+        'Email and password are required'
+    );
+});
+
+test('login should reject a user that does not exist', async () => {
+    const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+            email: 'unknown@example.com',
+            password: 'SecurePassword123!'
+        })
+        .expect(401);
+
+    expect(response.body.error).toBe(
+        'Invalid email or password'
+    );
+});
+
+test('GET task should return 404 for unknown task id', async () => {
+    const token = await registerAndLogin();
+
+    const response = await request(app)
+        .get('/api/tasks/not-a-real-task-id')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+
+    expect(response.body.error).toBe('Task not found');
+});
+
+test('UPDATE should return 404 for unknown task id', async () => {
+    const token = await registerAndLogin();
+
+    const response = await request(app)
+        .put('/api/tasks/not-a-real-task-id')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+            title: 'Updated Task'
+        })
+        .expect(404);
+
+    expect(response.body.error).toBe('Task not found');
+});
+
+test('UPDATE should reject an empty title', async () => {
+    const token = await registerAndLogin();
+
+    const created = await request(app)
+        .post('/api/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+            title: 'Original Task'
+        })
+        .expect(201);
+
+    const response = await request(app)
+        .put(`/api/tasks/${created.body.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+            title: ''
+        })
+        .expect(400);
+
+    expect(response.body.error).toBe(
+        'Title must be a non-empty string'
+    );
+});
+
+test('UPDATE should reject a non-string description', async () => {
+    const token = await registerAndLogin();
+
+    const created = await request(app)
+        .post('/api/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+            title: 'Original Task'
+        })
+        .expect(201);
+
+    const response = await request(app)
+        .put(`/api/tasks/${created.body.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+            description: 12345
+        })
+        .expect(400);
+
+    expect(response.body.error).toBe(
+        'Description must be a string'
+    );
+    });
+
+    test('DELETE should return 404 for unknown task id', async () => {
+        const token = await registerAndLogin();
+
+        const response = await request(app)
+            .delete('/api/tasks/not-a-real-task-id')
+            .set('Authorization', `Bearer ${token}`)
+            .expect(404);
+
+        expect(response.body.error).toBe('Task not found');
+    });
 });
