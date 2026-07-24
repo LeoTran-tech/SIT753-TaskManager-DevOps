@@ -211,10 +211,11 @@ pipeline {
 
                 echo 'Starting / updating monitoring infrastructure...'
 
-                bat '''
-                    docker compose -f monitoring\\docker-compose.yml config
-                    docker compose -f monitoring\\docker-compose.yml up -d
-                '''
+		bat '''
+   		 "C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml config
+
+  		"C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml up -d
+		'''
 
                 echo 'Verifying monitoring services and production target...'
 
