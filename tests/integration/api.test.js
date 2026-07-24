@@ -71,6 +71,24 @@ describe('Task Manager API - Integration Tests', () => {
         });
     });
 
+    test('GET /metrics should expose Prometheus metrics', async () => {
+        await request(app)
+            .get('/health')
+            .expect(200);
+
+        const response = await request(app)
+            .get('/metrics')
+            .expect(200);
+
+        expect(response.headers['content-type']).toContain('text/plain');
+        expect(response.text).toContain(
+            'task_manager_http_requests_total'
+        );
+        expect(response.text).toContain(
+            'task_manager_http_request_duration_seconds'
+        );
+    });
+
     test('user should be able to register', async () => {
         const response = await request(app)
             .post('/api/auth/register')

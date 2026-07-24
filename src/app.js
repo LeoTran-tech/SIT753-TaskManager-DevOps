@@ -2,10 +2,15 @@ const express = require('express');
 
 const taskRoutes = require('./routes/taskRoutes');
 const authRoutes = require('./routes/authRoutes');
+const {
+  metricsMiddleware,
+  metricsHandler
+} = require('./monitoring/metrics');
 
 const app = express();
 
 app.use(express.json());
+app.use(metricsMiddleware);
 
 // Home endpoint
 app.get('/', (req, res) => {
@@ -23,6 +28,8 @@ app.get('/health', (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+
+app.get('/metrics', metricsHandler);
 
 // Authentication API
 app.use('/api/auth', authRoutes);
