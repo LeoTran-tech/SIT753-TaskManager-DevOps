@@ -205,11 +205,118 @@ pipeline {
             }
         }
 
+        stage('Monitoring') {
+            steps {
+                echo '===== MONITORING STAGE ====='
+
+                echo 'Starting / updating monitoring infrastructure...'
+
+                bat '''
+                    docker compose -f monitoring\\docker-compose.yml config
+                    docker compose -f monitoring\\docker-compose.yml up -d
+                '''
+
+                echo 'Verifying monitoring services and production target...'
+
+                powershell '''
+                    $ErrorActionPreference = "Stop"
+
+                    Write-Host "Waiting for Prometheus..."
+
+                    $prometheusReady = $false
+
+                    for ($attempt = 1; $attempt -le 12; $attempt++) {
+                        try {
+                            $response = Invoke-WebRequest `
+                                -Uri "http://localhost:9090/-/ready" `
+                                -UseBasicParsing `
+                                -TimeoutSec 5
+
+                            if ($response.StatusCode -eq 200) {
+                                $prometheusReady = $true
+                                break
+                            }
+                        }
+                        catch {
+                            Write-Host "Prometheus not ready yet..."
+                        }
+
+                        Start-Sleep -Seconds 5
+                    }
+
+                    if (-not $prometheusReady) {
+                        throw "Prometheus did not become ready."
+                    }
+
+                    Write-Host "Prometheus is ready."
+
+                    $productionUp = $false
+
+                    for ($attempt = 1; $attempt -le 12; $attempt++) {
+
+                        $query = [uri]::EscapeDataString(
+                            'up{job="task-manager-production"}'
+                        )
+
+                        $result = Invoke-RestMethod `
+                            -Uri "http://localhost:9090/api/v1/query?query=$query"
+
+                        if (
+                            $result.status -eq "success" -and
+                            $result.data.result.Count -gt 0
+                        ) {
+                            $value = [double]$result.data.result[0].value[1]
+
+                            Write-Host "Production Prometheus UP metric: $value"
+
+                            if ($value -eq 1) {
+                                $productionUp = $true
+                                break
+                            }
+                        }
+
+                        Start-Sleep -Seconds 5
+                    }
+
+                    if (-not $productionUp) {
+                        throw "Prometheus reports production API as DOWN."
+                    }
+
+                    Write-Host "Production target is UP in Prometheus."
+
+                    $rules = Invoke-RestMethod `
+                        -Uri "http://localhost:9090/api/v1/rules"
+
+                    $ruleNames = @(
+                        $rules.data.groups.rules |
+                        ForEach-Object { $_.name }
+                    )
+
+                    if ($ruleNames -notcontains "ProductionAPIDown") {
+                        throw "ProductionAPIDown alert rule was not loaded."
+                    }
+
+                    Write-Host "ProductionAPIDown alert rule is loaded."
+
+                    $alertmanager = Invoke-WebRequest `
+                        -Uri "http://localhost:9093/-/ready" `
+                        -UseBasicParsing
+
+                    if ($alertmanager.StatusCode -ne 200) {
+                        throw "Alertmanager is not ready."
+                    }
+
+                    Write-Host "Alertmanager is ready."
+                    Write-Host "Monitoring verification completed successfully."
+                '''
+            }
+        }
+
     }
 
     post {
         success {
-            echo 'Build, Test, Code Quality, Security, Deploy and Release stages completed successfully.'
+            echo 'All 7 DevOps pipeline stages completed successfully.'
         }
 
         failure {
