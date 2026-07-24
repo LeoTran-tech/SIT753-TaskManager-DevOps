@@ -13,13 +13,11 @@ pipeline {
 
                 bat 'node --version'
                 bat 'npm --version'
-
                 bat 'npm ci'
 
                 bat 'docker version'
 
                 bat 'docker build -t %IMAGE_NAME%:%BUILD_NUMBER% .'
-
                 bat 'docker tag %IMAGE_NAME%:%BUILD_NUMBER% %IMAGE_NAME%:latest'
             }
         }
@@ -40,11 +38,34 @@ pipeline {
                 }
             }
         }
+
+        stage('Code Quality') {
+            steps {
+                echo '===== CODE QUALITY STAGE ====='
+
+                withSonarQubeEnv('Local SonarQube') {
+                    bat '''
+                        set SONAR_TOKEN=%SONAR_AUTH_TOKEN%
+                        npx @sonar/scan
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                echo '===== SONARQUBE QUALITY GATE ====='
+
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo 'Build and Test stages completed successfully.'
+            echo 'Build, Test and Code Quality stages completed successfully.'
         }
 
         failure {
