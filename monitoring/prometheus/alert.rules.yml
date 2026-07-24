@@ -1,0 +1,47 @@
+groups:
+  - name: task-manager-alerts
+    rules:
+
+      - alert: ProductionAPIDown
+        expr: up{job="task-manager-production"} == 0
+        for: 20s
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "Task Manager production API is down"
+          description: "Prometheus has been unable to scrape the production API for more than 20 seconds."
+
+      - alert: ProductionHighErrorRate
+        expr: |
+          (
+            sum(rate(task_manager_http_requests_total{job="task-manager-production",status_code=~"5.."}[1m]))
+            /
+            clamp_min(
+              sum(rate(task_manager_http_requests_total{job="task-manager-production"}[1m])),
+              0.001
+            )
+          ) > 0.10
+        for: 1m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "Production API has a high HTTP error rate"
+          description: "More than 10 percent of production requests are returning HTTP 5xx responses."
+
+      - alert: ProductionHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(task_manager_http_request_duration_seconds_bucket{job="task-manager-production"}[2m])
+            )
+          ) > 1
+        for: 1m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "Production API latency is high"
+          description: "The production API p95 response time has exceeded one second."
