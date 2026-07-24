@@ -49,15 +49,50 @@ pipeline {
                         npx @sonar/scan
                     '''
                 }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                echo '===== SONARQUBE QUALITY GATE ====='
 
                 timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Security') {
+            steps {
+                echo '===== SECURITY STAGE ====='
+
+                bat '''
+                    if exist security-reports rmdir /s /q security-reports
+                    mkdir security-reports
+                '''
+
+                echo 'Checking npm dependencies for HIGH/CRITICAL vulnerabilities...'
+
+                bat 'npm audit --audit-level=high'
+
+                bat '''
+                    npm audit --json --audit-level=high > security-reports\\npm-audit.json
+                '''
+
+                echo 'Generating full Trivy vulnerability report...'
+
+                bat '''
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.72.0 image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 %IMAGE_NAME%:%BUILD_NUMBER% > security-reports\\trivy-full.txt
+                '''
+
+                echo 'Applying Trivy blocking security gate...'
+
+                bat '''
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.72.0 image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 %IMAGE_NAME%:%BUILD_NUMBER% > security-reports\\trivy-gate.txt
+                    set TRIVY_EXIT=%ERRORLEVEL%
+                    type security-reports\\trivy-gate.txt
+                    exit /b %TRIVY_EXIT%
+                '''
+            }
+
+            post {
+                always {
+                    archiveArtifacts artifacts: 'security-reports/**',
+                                     allowEmptyArchive: true
                 }
             }
         }
@@ -65,7 +100,7 @@ pipeline {
 
     post {
         success {
-            echo 'Build, Test and Code Quality stages completed successfully.'
+            echo 'Build, Test, Code Quality and Security stages completed successfully.'
         }
 
         failure {
