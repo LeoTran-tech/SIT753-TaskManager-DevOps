@@ -178,11 +178,38 @@ pipeline {
                 '''
             }
         }
+
+        stage('Release') {
+            steps {
+                echo '===== RELEASE STAGE - PRODUCTION ====='
+
+                withCredentials([
+                    string(
+                        credentialsId: 'production-jwt-secret',
+                        variable: 'PRODUCTION_JWT_SECRET'
+                    )
+                ]) {
+                    powershell '''
+                        .\\scripts\\release-production.ps1 `
+                            -ImageName "$env:IMAGE_NAME" `
+                            -BuildNumber "$env:BUILD_NUMBER"
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    archiveArtifacts artifacts: 'release-info.json',
+                                     allowEmptyArchive: true
+                }
+            }
+        }
+
     }
 
     post {
         success {
-            echo 'Build, Test, Code Quality, Security and Deploy stages completed successfully.'
+            echo 'Build, Test, Code Quality, Security, Deploy and Release stages completed successfully.'
         }
 
         failure {
