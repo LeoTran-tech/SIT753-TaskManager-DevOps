@@ -96,15 +96,97 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy') {
+            steps {
+                echo '===== DEPLOY STAGE - STAGING ====='
+
+                withCredentials([
+                    string(
+                        credentialsId: 'staging-jwt-secret',
+                        variable: 'STAGING_JWT_SECRET'
+                    )
+                ]) {
+                    bat '''
+                        @echo off
+
+                        echo Preparing staging environment...
+
+                        docker rm -f task-manager-staging >nul 2>&1
+
+                        docker volume inspect task-manager-staging-data >nul 2>&1 || docker volume create task-manager-staging-data
+
+                        echo Deploying build %BUILD_NUMBER% to staging...
+
+                        docker run -d ^
+                            --name task-manager-staging ^
+                            --restart unless-stopped ^
+                            -p 3001:3000 ^
+                            -v task-manager-staging-data:/app/data ^
+                            -e JWT_SECRET=%STAGING_JWT_SECRET% ^
+                            -e JWT_EXPIRES_IN=1h ^
+                            %IMAGE_NAME%:%BUILD_NUMBER%
+                    '''
+                }
+
+                echo 'Waiting for staging container health check...'
+
+                powershell '''
+                    $maxAttempts = 12
+
+                    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+
+                        $health = docker inspect `
+                            --format='{{.State.Health.Status}}' `
+                            task-manager-staging 2>$null
+
+                        Write-Host "Health check $attempt/$maxAttempts : $health"
+
+                        if ($health -eq 'healthy') {
+                            Write-Host 'Staging container is healthy.'
+                            exit 0
+                        }
+
+                        if ($health -eq 'unhealthy') {
+                            Write-Host 'Staging container became unhealthy.'
+                            docker logs task-manager-staging
+                            exit 1
+                        }
+
+                        Start-Sleep -Seconds 5
+                    }
+
+                    Write-Host 'Staging health check timed out.'
+                    docker logs task-manager-staging
+                    exit 1
+                '''
+
+                echo 'Verifying staging API...'
+
+                powershell '''
+                    $response = Invoke-RestMethod `
+                        -Uri 'http://localhost:3001/health' `
+                        -Method Get
+
+                    $response | ConvertTo-Json
+
+                    if ($response.status -ne 'healthy') {
+                        throw 'Staging API health endpoint failed.'
+                    }
+
+                    Write-Host 'Staging deployment verified successfully.'
+                '''
+            }
+        }
     }
 
     post {
         success {
-            echo 'Build, Test, Code Quality and Security stages completed successfully.'
+            echo 'Build, Test, Code Quality, Security and Deploy stages completed successfully.'
         }
 
         failure {
-            echo 'Pipeline failed. Deployment is blocked.'
+            echo 'Pipeline failed. Subsequent stages are blocked.'
         }
     }
 }
