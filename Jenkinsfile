@@ -5,6 +5,10 @@ pipeline {
         IMAGE_NAME = 'task-manager-api'
     }
 
+    triggers {
+        pollSCM('H/2 * * * *')
+    }
+    
     stages {
 
         stage('Build') {
@@ -211,11 +215,10 @@ pipeline {
 
                 echo 'Starting / updating monitoring infrastructure...'
 
-		bat '''
-   		 "C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml config
-
-  		"C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml up -d
-		'''
+        bat '''
+            docker compose -f monitoring\\docker-compose.yml config
+            docker compose -f monitoring\\docker-compose.yml up -d
+        '''
 
                 echo 'Verifying monitoring services and production target...'
 
