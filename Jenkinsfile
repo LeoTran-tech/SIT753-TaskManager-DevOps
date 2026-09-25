@@ -212,11 +212,43 @@ pipeline {
         stage('Monitoring') {
             steps {
                 echo '===== MONITORING STAGE ====='
+                echo 'Preparing Discord webhook for Alertmanager...'
+
+                withCredentials([
+                    string(
+                        credentialsId: 'discord-webhook-url',
+                        variable: 'DISCORD_WEBHOOK_URL'
+                    )
+                ]) {
+                    powershell '''
+                        $ErrorActionPreference = "Stop"
+
+                        $secretDir = Join-Path `
+                            $env:WORKSPACE `
+                            "monitoring\\alertmanager\\secrets"
+
+                        New-Item `
+                            -ItemType Directory `
+                            -Force `
+                            -Path $secretDir | Out-Null
+
+                        $secretFile = Join-Path `
+                            $secretDir `
+                            "discord_webhook_url"
+
+                        [System.IO.File]::WriteAllText(
+                            $secretFile,
+                            $env:DISCORD_WEBHOOK_URL
+                        )
+
+                        Write-Host "Discord webhook credential prepared for Alertmanager."
+                    '''
+                }
 
                 echo 'Starting / updating monitoring infrastructure...'
 
         bat '"C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml config'
-        bat '"C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml up -d'
+        bat '"C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml up -d --force-recreate'
 
                 echo 'Verifying monitoring services and production target...'
 
@@ -309,6 +341,14 @@ pipeline {
                     }
 
                     Write-Host "Alertmanager is ready."
+                    $secretCheck = docker exec task-manager-alertmanager `
+                        sh -c "test -s /run/secrets/discord_webhook_url && echo READY"
+
+                    if ($secretCheck -notmatch "READY") {
+                        throw "Discord webhook secret is not available inside Alertmanager."
+                    }
+
+                    Write-Host "Discord notification credential is available."
                     Write-Host "Monitoring verification completed successfully."
                 '''
             }
