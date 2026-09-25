@@ -8,7 +8,7 @@ pipeline {
     triggers {
         pollSCM('H/2 * * * *')
     }
-    
+
     stages {
 
         stage('Build') {
@@ -21,7 +21,7 @@ pipeline {
 
                 bat 'docker version'
 
-                bat 'docker build -t %IMAGE_NAME%:%BUILD_NUMBER% .'
+                bat 'docker build --pull -t %IMAGE_NAME%:%BUILD_NUMBER% .'
                 bat 'docker tag %IMAGE_NAME%:%BUILD_NUMBER% %IMAGE_NAME%:latest'
             }
         }
@@ -215,10 +215,8 @@ pipeline {
 
                 echo 'Starting / updating monitoring infrastructure...'
 
-        bat '''
-            docker compose -f monitoring\\docker-compose.yml config
-            docker compose -f monitoring\\docker-compose.yml up -d
-        '''
+        bat '"C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml config'
+        bat '"C:\\Users\\admin\\AppData\\Local\\Programs\\DockerDesktop\\resources\\cli-plugins\\docker-compose.exe" -f monitoring\\docker-compose.yml up -d'
 
                 echo 'Verifying monitoring services and production target...'
 
