@@ -2,6 +2,11 @@ FROM node:22-trixie-slim
 
 WORKDIR /app
 
+# Install current Debian security updates
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 
 RUN npm ci --omit=dev \
